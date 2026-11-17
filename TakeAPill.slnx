@@ -2,5 +2,5 @@
   <Project Path="TakeAPill.Application/TakeAPill.Application.csproj" />
   <Project Path="TakeAPill.Domain/TakeAPill.Domain.csproj" />
   <Project Path="TakeAPill.Infrastructure/TakeAPill.Infrastructure.csproj" />
-  <Project Path="TakeAPill/TakeAPill.Web.csproj" />
+  <Project Path="TakeAPill.Web/TakeAPill.Web.csproj" />
 </Solution>
