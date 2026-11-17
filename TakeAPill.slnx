@@ -1,8 +1,6 @@
 <Solution>
-  <Folder Name="/TakeAPill/">
-    <Project Path="TakeAPill/TakeAPill.Web.csproj" />
-  </Folder>
   <Project Path="TakeAPill.Application/TakeAPill.Application.csproj" />
   <Project Path="TakeAPill.Domain/TakeAPill.Domain.csproj" />
   <Project Path="TakeAPill.Infrastructure/TakeAPill.Infrastructure.csproj" />
+  <Project Path="TakeAPill/TakeAPill.Web.csproj" />
 </Solution>
