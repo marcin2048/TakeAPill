@@ -1,0 +1,228 @@
+@page "/intake-schedules"
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+
+@using System.ComponentModel.DataAnnotations
+@using MediatR
+@using TakeAPill.Application.IntakeSchedules.Commands.CreateIntakeSchedule
+@using TakeAPill.Application.IntakeSchedules.Commands.DeleteIntakeSchedule
+@using TakeAPill.Application.IntakeSchedules.Queries.GetIntakeSchedules
+@using TakeAPill.Application.Pills.Queries.GetPills
+@inject ISender Sender
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Intake schedules</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Intake schedules</h1>
+    <button type="button" class="btn btn-primary" @onclick="ToggleCreateForm">
+        @(showCreateForm ? "Anuluj" : "Dodaj")
+    </button>
+</div>
+
+@if (showCreateForm)
+{
+    <EditForm Model="newSchedule" OnValidSubmit="CreateScheduleAsync" class="card card-body mb-4">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label for="pillId" class="form-label">Pill</label>
+                @if (pills is null)
+                {
+                    <select id="pillId" class="form-select" disabled>
+                        <option>Loading...</option>
+                    </select>
+                }
+                else
+                {
+                    <InputSelect id="pillId" @bind-Value="newSchedule.PillId" class="form-select">
+                        <option value="0">-- Select a pill --</option>
+                        @foreach (var pill in pills)
+                        {
+                            <option value="@pill.Id">@pill.Name</option>
+                        }
+                    </InputSelect>
+                }
+                <ValidationMessage For="@(() => newSchedule.PillId)" />
+            </div>
+            <div class="col-md-3">
+                <label for="intakeFrequency" class="form-label">Frequency</label>
+                <InputText id="intakeFrequency" @bind-Value="newSchedule.IntakeFrequency" class="form-control" />
+                <ValidationMessage For="@(() => newSchedule.IntakeFrequency)" />
+            </div>
+            <div class="col-md-3">
+                <label for="startDate" class="form-label">Start date</label>
+                <InputDate id="startDate" @bind-Value="newSchedule.StartDate" class="form-control" />
+                <ValidationMessage For="@(() => newSchedule.StartDate)" />
+            </div>
+            <div class="col-md-3">
+                <label for="endDate" class="form-label">End date</label>
+                <InputDate id="endDate" @bind-Value="newSchedule.EndDate" class="form-control" />
+                <ValidationMessage For="@(() => newSchedule.EndDate)" />
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-success" disabled="@isSaving">Zapisz</button>
+        </div>
+    </EditForm>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger" role="alert">@errorMessage</div>
+}
+
+@if (schedules is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (schedules.Count == 0)
+{
+    <div class="alert alert-info">
+        No intake schedules have been configured yet.
+    </div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Pill</th>
+                <th>Frequency</th>
+                <th>Start date</th>
+                <th>End date</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var schedule in schedules)
+            {
+                <tr>
+                    <td>@schedule.PillName</td>
+                    <td><code>@schedule.IntakeFrequency</code></td>
+                    <td>@schedule.StartDate.ToString("yyyy-MM-dd")</td>
+                    <td>@(schedule.EndDate?.ToString("yyyy-MM-dd") ?? "No end date")</td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                @onclick="() => DeleteScheduleAsync(schedule.Id)"
+                                disabled="@isDeleting">
+                            Usuń
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<IntakeScheduleListItemDto>? schedules;
+    private IReadOnlyList<PillListItemDto>? pills;
+    private CreateScheduleModel newSchedule = CreateScheduleModel.CreateDefault();
+    private bool showCreateForm;
+    private bool isSaving;
+    private bool isDeleting;
+    private string? errorMessage;
+    private string? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authenticationState.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("The current user could not be identified.");
+
+        await LoadPillsAsync();
+        await LoadSchedulesAsync();
+    }
+
+    private void ToggleCreateForm()
+    {
+        showCreateForm = !showCreateForm;
+        errorMessage = null;
+    }
+
+    private async Task CreateScheduleAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            await Sender.Send(
+                new CreateIntakeScheduleCommand(
+                    currentUserId!,
+                    newSchedule.PillId,
+                    newSchedule.IntakeFrequency,
+                    newSchedule.StartDate,
+                    newSchedule.EndDate));
+
+            newSchedule = CreateScheduleModel.CreateDefault();
+            showCreateForm = false;
+            await LoadSchedulesAsync();
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteScheduleAsync(int id)
+    {
+        isDeleting = true;
+        errorMessage = null;
+
+        try
+        {
+            await Sender.Send(new DeleteIntakeScheduleCommand(currentUserId!, id));
+            await LoadSchedulesAsync();
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private async Task LoadSchedulesAsync()
+    {
+        schedules = await Sender.Send(new GetIntakeSchedulesQuery(currentUserId!));
+    }
+
+    private async Task LoadPillsAsync()
+    {
+        pills = await Sender.Send(new GetPillsQuery());
+    }
+
+    private sealed class CreateScheduleModel
+    {
+        [Range(1, int.MaxValue, ErrorMessage = "Pill ID must be greater than zero.")]
+        public int PillId { get; set; }
+
+        [Required(ErrorMessage = "Frequency is required.")]
+        [StringLength(100)]
+        public string IntakeFrequency { get; set; } = string.Empty;
+
+        [Required]
+        public DateTimeOffset StartDate { get; set; }
+
+        public DateTimeOffset? EndDate { get; set; }
+
+        public static CreateScheduleModel CreateDefault() => new()
+        {
+            StartDate = new DateTimeOffset(DateTime.Today)
+        };
+    }
+}
